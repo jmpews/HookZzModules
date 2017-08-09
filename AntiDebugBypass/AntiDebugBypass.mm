@@ -53,9 +53,16 @@ int fake_syscall(int number, ...) {
   caddr_t addr;
   int data;
 
+  // fake stack
+  char *stack[8];
+
+  va_list args;
+  va_start(args, number);
+
+  // get the origin stack args copy.(must >= origin stack args)
+  memcpy(stack, args, 8 * 8);
+
   if (number == SYS_ptrace) {
-    va_list args;
-    va_start(args, number);
     request = va_arg(args, int);
     pid = va_arg(args, pid_t);
     addr = va_arg(args, caddr_t);
@@ -66,8 +73,14 @@ int fake_syscall(int number, ...) {
             @"0, 0)' and bypass.");
       return 0;
     }
+  } else {
+    va_end(args);
   }
-  int x = orig_syscall(number, request, pid, addr, data);
+
+  // must understand the principle of `function call`. `parameter pass` is before `switch to target)`
+  // so, pass the whole `stack`, it just actually faked an original stack.
+  // Not pass a large structure, is will relace with a `hidden memcpy`.
+  int x = orig_syscall(number, stack[0], stack[1], stack[2], stack[3], stack[4], stack[5], stack[6], stack[7]);
   return x;
 }
 
@@ -83,11 +96,10 @@ __attribute__((constructor)) void patch_ptrace_sysctl_syscall() {
               NULL, NULL);
   ZZEnableHook((void *)sysctl_ptr);
 
-  // zpointer syscall_ptr = (void *)syscall;
-  // ZZBuildHook((void *)syscall_ptr, (void *)fake_syscall, (void
-  // **)&orig_syscall,
-  //             NULL, NULL);
-  // ZZEnableHook((void *)syscall_ptr);
+  zpointer syscall_ptr = (void *)syscall;
+  ZZBuildHook((void *)syscall_ptr, (void *)fake_syscall, (void **)&orig_syscall,
+              NULL, NULL);
+  ZZEnableHook((void *)syscall_ptr);
 }
 // --- end --
 
@@ -109,8 +121,8 @@ void syscall_pre_call(struct RegState_ *rs) {
 }
 __attribute__((constructor)) void patch_syscall_by_pre_call() {
   zpointer syscall_ptr = (void *)syscall;
-  ZZBuildHook((void *)syscall_ptr, NULL, NULL, (void *)syscall_pre_call, NULL);
-  ZZEnableHook((void *)syscall_ptr);
+  // ZZBuildHook((void *)syscall_ptr, NULL, NULL, (void *)syscall_pre_call, NULL);
+  // ZZEnableHook((void *)syscall_ptr);
 }
 
 // --- end ---
@@ -145,7 +157,7 @@ __attribute__((constructor)) void patch_svc_x80() {
   uint32_t svc_x80_byte = 0xd4001001;
   MachoMem *mem = new MachoMem();
   mem->parse_macho();
-  mem->parse_dyld();
+  // mem->parse_dyld();
   sect64 = mem->get_sect_by_name("__text");
   curr_addr = sect64->sect_addr;
   end_addr = curr_addr + sect64->sect_64->size;
