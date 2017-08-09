@@ -79,7 +79,7 @@ int fake_syscall(int number, ...) {
 
   // must understand the principle of `function call`. `parameter pass` is before `switch to target`
   // so, pass the whole `stack`, it just actually faked an original stack.
-  // Not pass a large structure, is will relace with a `hidden memcpy`.
+  // Not pass a large structure,  will be replace with a `hidden memcpy`.
   int x = orig_syscall(number, stack[0], stack[1], stack[2], stack[3], stack[4], stack[5], stack[6], stack[7]);
   return x;
 }
