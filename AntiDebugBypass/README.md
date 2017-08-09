@@ -414,6 +414,8 @@ __attribute__((constructor)) void patch_syscall_by_pre_call() {
 // --- end ---
 ```
 
+#### `svc #0x80` 反调试绕过
+
 这里介绍关键是介绍如何对 svc 反调试的绕过.
 
 上面已经对 svc 进行了简单的介绍. 所以理所当然想到的是希望通过 `syscall hook`, 劫持 `system call table(sysent)` . 这里相当于实现 `syscall hook`. 但是难点之一是需要找到 `system call table(sysent)`, 这一步可以通过 [joker](http://newosxbook.com/tools/joker.html), 对于 IOS 10.x 可以参考 `http://ioshackerwiki.com/syscalls/`, 难点之二是作为 kext 加载. 可以参考 **附录**.
