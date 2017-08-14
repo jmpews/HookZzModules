@@ -87,19 +87,19 @@ int fake_syscall(int number, ...) {
 __attribute__((constructor)) void patch_ptrace_sysctl_syscall() {
 
   zpointer ptrace_ptr = (void *)ptrace;
-  ZZBuildHook((void *)ptrace_ptr, (void *)fake_ptrace, (void **)&orig_ptrace,
+  ZzBuildHook((void *)ptrace_ptr, (void *)fake_ptrace, (void **)&orig_ptrace,
               NULL, NULL);
-  ZZEnableHook((void *)ptrace_ptr);
+  ZzEnableHook((void *)ptrace_ptr);
 
   zpointer sysctl_ptr = (void *)sysctl;
-  ZZBuildHook((void *)sysctl_ptr, (void *)fake_sysctl, (void **)&orig_sysctl,
+  ZzBuildHook((void *)sysctl_ptr, (void *)fake_sysctl, (void **)&orig_sysctl,
               NULL, NULL);
-  ZZEnableHook((void *)sysctl_ptr);
+  ZzEnableHook((void *)sysctl_ptr);
 
   zpointer syscall_ptr = (void *)syscall;
-  ZZBuildHook((void *)syscall_ptr, (void *)fake_syscall, (void **)&orig_syscall,
+  ZzBuildHook((void *)syscall_ptr, (void *)fake_syscall, (void **)&orig_syscall,
               NULL, NULL);
-  ZZEnableHook((void *)syscall_ptr);
+  ZzEnableHook((void *)syscall_ptr);
 }
 // --- end --
 
@@ -121,8 +121,8 @@ void syscall_pre_call(struct RegState_ *rs) {
 }
 __attribute__((constructor)) void patch_syscall_by_pre_call() {
   zpointer syscall_ptr = (void *)syscall;
-  // ZZBuildHook((void *)syscall_ptr, NULL, NULL, (void *)syscall_pre_call, NULL);
-  // ZZEnableHook((void *)syscall_ptr);
+  // ZzBuildHook((void *)syscall_ptr, NULL, NULL, (void *)syscall_pre_call, NULL);
+  // ZzEnableHook((void *)syscall_ptr);
 }
 
 // --- end ---
@@ -162,7 +162,7 @@ __attribute__((constructor)) void patch_svc_x80() {
   curr_addr = sect64->sect_addr;
   end_addr = curr_addr + sect64->sect_64->size;
 
-  ZZInitialize();
+  ZzInitialize();
   while (curr_addr < end_addr) {
     svc_x80_addr = mem->macho_search_data(
         sect64->sect_addr, sect64->sect_addr + sect64->sect_64->size,
@@ -170,9 +170,9 @@ __attribute__((constructor)) void patch_svc_x80() {
     if (svc_x80_addr) {
       NSLog(@"find svc #0x80 at %p with aslr (%p without aslr)",
             (void *)svc_x80_addr, (void *)(svc_x80_addr - mem->m_aslr_slide));
-      ZZBuildHook((void *)svc_x80_addr, NULL, NULL,
+      ZzBuildHook((void *)svc_x80_addr, NULL, NULL,
                   (zpointer)patch_svc_pre_call, NULL);
-      ZZEnableHook((void *)svc_x80_addr);
+      ZzEnableHook((void *)svc_x80_addr);
       curr_addr = svc_x80_addr + 4;
     } else {
       break;
@@ -219,9 +219,9 @@ void objcMethod_pre_call(struct RegState_ *rs) {
   Method oriMethod = class_getInstanceMethod(hookClass, oriSEL);
   IMP oriImp = method_getImplementation(oriMethod);
 
-  ZZInitialize();
-  ZZBuildHook((void *)oriImp, NULL, NULL, (zpointer)objcMethod_pre_call, NULL);
-  ZZEnableHook((void *)oriImp);
+  ZzInitialize();
+  ZzBuildHook((void *)oriImp, NULL, NULL, (zpointer)objcMethod_pre_call, NULL);
+  ZzEnableHook((void *)oriImp);
 }
 
 + (void)zzPrintDirInfo {
