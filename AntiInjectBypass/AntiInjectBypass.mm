@@ -90,3 +90,50 @@ void objcMethod_pre_call(struct RegState_ *rs) {
 }
 
 @end
+
+
+// uint32_t _dyld_image_count(void);
+// void _dyld_register_func_for_add_image(
+//     void (*func)(const struct mach_header *mh, intptr_t vmaddr_slide));
+// struct mach_header *_dyld_get_image_header(uint32_t image_index);
+// char *_dyld_get_image_name(uint32_t image_index);
+
+#include <mach-o/dyld.h>
+#import <objc/runtime.h>
+void DetectLoadDylibs() {
+  // struct mach_header *_dyld_get_image_header(uint32_t image_index);
+  const struct mach_header *header;
+  zpointer load_cmd_addr;
+  struct load_command *load_cmd;
+  struct dylib_command *dy_cmd;
+  struct dylib lib;
+  const char *dylib_name;
+
+  header = _dyld_get_image_header(0);
+
+  bool is64bit = header->magic == MH_MAGIC_64 || header->magic == MH_CIGAM_64;
+  if (is64bit) {
+    load_cmd_addr = (zpointer)(header + sizeof(struct mach_header_64));
+    for (zsize i = 0; i < header->ncmds; i++) {
+      load_cmd = (struct load_command *)load_cmd_addr;
+      if (load_cmd->cmd == LC_ID_DYLIB) {
+        dy_cmd = (struct dylib_command *)load_cmd_addr;
+        lib = dy_cmd->dylib;
+        dylib_name = (char *)(load_cmd_addr + lib.name.offset);
+      }
+    }
+  }
+}
+
+void DetectImageList() {
+  zsize count = _dyld_image_count();
+  const char *dyld_name;
+  for (zsize i = 0; i < count; i++) {
+    dyld_name = _dyld_get_image_name(i);
+  }
+}
+void DetectFileList() {
+  if ([[NSFileManager defaultManager]
+          fileExistsAtPath:@"/Applications/Cydia.app"]) {
+  }
+}

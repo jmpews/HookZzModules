@@ -27,5 +27,5 @@ WARN_COLOR=\x1b[33;01m
 
 #-Wl,-undefined,dynamic_lookup 
 darwin.ios : $(SOURCES)
-	@$(ZZ_GCC) -framework Foundation -dynamiclib AntiDebug.m -o AntiDebug.dylib
+	$(ZZ_GCC) -framework Foundation -dynamiclib -Wl,-undefined,dynamic_lookup AntiDebug.m -o AntiDebug.dylib
 	@echo "$(OK_COLOR)build [test] success for arm64(IOS)! $(NO_COLOR)"
