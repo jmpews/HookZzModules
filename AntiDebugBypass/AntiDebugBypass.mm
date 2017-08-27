@@ -2,8 +2,6 @@ extern "C" {
 #include "hookzz.h"
 }
 
-
-
 #import <Foundation/Foundation.h>
 
 #include <sys/sysctl.h>
@@ -98,8 +96,6 @@ int fake_syscall(int number, ...) {
 
 __attribute__((constructor)) void patch_ptrace_sysctl_syscall() {
     
-    ZzInitialize();
-    
     zpointer ptrace_ptr = (void *)ptrace;
     ZzBuildHook((void *)ptrace_ptr, (void *)fake_ptrace, (void **)&orig_ptrace,
                 NULL, NULL);
@@ -119,7 +115,7 @@ __attribute__((constructor)) void patch_ptrace_sysctl_syscall() {
 
 
 // --- syscall bypass use `pre_call`
-void syscall_pre_call(RegState *rs, ZzCallerStack *stack) {
+void syscall_pre_call(RegState *rs, zpointer stack) {
     int num_syscall;
     int request;
     zpointer sp;
@@ -144,7 +140,7 @@ __attribute__((constructor)) void patch_syscall_by_pre_call() {
 
 // --- svc #0x80 bypass ---
 
-void hook_svc_pre_call(RegState *rs, ZzCallerStack *stack) {
+void hook_svc_pre_call(RegState *rs, zpointer stack) {
     int num_syscall;
     int request;
     num_syscall = (int)(uint64_t)(rs->general.regs.x16);
@@ -169,7 +165,7 @@ void hook_svc_pre_call(RegState *rs, ZzCallerStack *stack) {
     }
 }
 
-void hook_svc_half_call(RegState *rs, ZzCallerStack *stack) {
+void hook_svc_half_call(RegState *rs, zpointer stack) {
     // emmm... little long...
     if(STACK_CHECK_KEY(stack, (char *)"num_syscall")) {
         int num_syscall = STACK_GET(stack, (char *)"num_syscall", int);
@@ -230,7 +226,6 @@ __attribute__((constructor)) void hook_svc_x80() {
     text_end_addr = text_start_addr + sect_64->size;
     curr_addr = text_start_addr;
     
-    ZzInitialize();
     while (curr_addr < text_end_addr) {
         svc_x80_addr = (zaddr)zz_vm_search_data((zpointer)curr_addr, (zpointer)text_end_addr, (zbyte *)&svc_x80_byte, 4);
         if (svc_x80_addr) {
