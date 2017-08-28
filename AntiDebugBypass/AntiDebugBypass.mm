@@ -5,9 +5,9 @@ extern "C" {
 #import <Foundation/Foundation.h>
 
 #include <sys/sysctl.h>
-#include <sys/types.h>
 
 #include <mach-o/dyld.h>
+
 struct section_64 *zz_macho_get_section_64_via_name(struct mach_header_64 *header, char *sect_name);
 zpointer zz_macho_get_section_64_address_via_name(struct mach_header_64 *header, char *sect_name);
 zpointer zz_vm_search_data(const zpointer start_addr, zpointer end_addr, zbyte *data, zsize data_len);
@@ -27,7 +27,8 @@ struct segment_command_64 *zz_macho_get_segment_64_via_name(struct mach_header_6
 #endif
 
 
-// --- ptrace, sysctl, syscall bypass ---
+// ============= ptrace, sysctl, syscall bypass =============
+
 // runtime to get symbol address, but must link with `
 // -Wl,-undefined,dynamic_lookup` or you can use `dlopen` and `dlsym`
 extern "C" int ptrace(int request, pid_t pid, caddr_t addr, int data);
@@ -51,9 +52,9 @@ int fake_sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp,
         info->kp_proc.p_flag &= ~(P_TRACED);
         NSLog(@"[AntiDebugBypass] catch 'sysctl' and bypass.");
     }
+    return ret;
 }
 
-// ptrace(int request, pid_t pid, caddr_t addr, int data);
 int (*orig_syscall)(int number, ...);
 int fake_syscall(int number, ...) {
     int request;
@@ -87,7 +88,7 @@ int fake_syscall(int number, ...) {
     
     // must understand the principle of `function call`. `parameter pass` is
     // before `switch to target` so, pass the whole `stack`, it just actually
-    // faked an original stack. Not pass a large structure,  will be replace with
+    // faked an original stack. Do not pass a large structure,  will be replace with
     // a `hidden memcpy`.
     int x = orig_syscall(number, stack[0], stack[1], stack[2], stack[3], stack[4],
                          stack[5], stack[6], stack[7]);
@@ -111,11 +112,11 @@ __attribute__((constructor)) void patch_ptrace_sysctl_syscall() {
                 NULL, NULL);
     ZzEnableHook((void *)syscall_ptr);
 }
-// --- end --
+// ============= end =============
 
 
-// --- syscall bypass use `pre_call`
-void syscall_pre_call(RegState *rs, zpointer stack) {
+// ============= syscall bypass with `pre_call` =============
+void syscall_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
     int num_syscall;
     int request;
     zpointer sp;
@@ -132,15 +133,17 @@ void syscall_pre_call(RegState *rs, zpointer stack) {
 }
 __attribute__((constructor)) void patch_syscall_by_pre_call() {
     zpointer syscall_ptr = (void *)syscall;
-    // ZzBuildHook((void *)syscall_ptr, NULL, NULL, (void *)syscall_pre_call,
-    // NULL); ZzEnableHook((void *)syscall_ptr);
+    #if 0
+    ZzBuildHook((void *)syscall_ptr, NULL, NULL, syscall_pre_call, NULL);
+    ZzEnableHook((void *)syscall_ptr);
+    #endif
 }
-// --- end ---
+// ============= end =============
 
 
-// --- svc #0x80 bypass ---
+// ============= svc #0x80 bypass with `pre_call` & `post_call` =============
 
-void hook_svc_pre_call(RegState *rs, zpointer stack) {
+void hook_svc_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
     int num_syscall;
     int request;
     num_syscall = (int)(uint64_t)(rs->general.regs.x16);
@@ -160,16 +163,16 @@ void hook_svc_pre_call(RegState *rs, zpointer stack) {
             NSLog(@"[AntiDebugBypass] catch 'SVC-0x80; ptrace' and bypass");
         }
     } else if(num_syscall == SYS_sysctl) {
-        STACK_SET(stack, (char *)"num_syscall", num_syscall, int);
-        STACK_SET(stack, (char *)"info_ptr", rs->general.regs.x2, zpointer);
+        STACK_SET(callstack, (char *)"num_syscall", num_syscall, int);
+        STACK_SET(callstack, (char *)"info_ptr", rs->general.regs.x2, zpointer);
     }
 }
 
-void hook_svc_half_call(RegState *rs, zpointer stack) {
+void hook_svc_half_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
     // emmm... little long...
-    if(STACK_CHECK_KEY(stack, (char *)"num_syscall")) {
-        int num_syscall = STACK_GET(stack, (char *)"num_syscall", int);
-        struct kinfo_proc *info = STACK_GET(stack, (char *)"info_ptr", struct kinfo_proc *);
+    if(STACK_CHECK_KEY(callstack, (char *)"num_syscall")) {
+        int num_syscall = STACK_GET(callstack, (char *)"num_syscall", int);
+        struct kinfo_proc *info = STACK_GET(callstack, (char *)"info_ptr", struct kinfo_proc *);
         if (num_syscall == SYS_sysctl)
         {
             NSLog(@"[AntiDebugBypass] catch 'SVC-0x80; sysctl' and bypass");
@@ -177,37 +180,40 @@ void hook_svc_half_call(RegState *rs, zpointer stack) {
         }
     }
 }
+
 /* Two choice */
 
 /* 1. use MachoParser */
 
-// #include "MachoMem.h"
-// __attribute__((constructor)) void hook_svc_x80() {
-//   const section_64_info_t *sect64;
-//   zaddr svc_x80_addr;
-//   zaddr curr_addr, end_addr;
-//   uint32_t svc_x80_byte = 0xd4001001;
-//   MachoMem *mem = new MachoMem();
-//   mem->parse_macho();
-//   sect64 = mem->get_sect_by_name("__text");
-//   curr_addr = sect64->sect_addr;
-//   end_addr = curr_addr + sect64->sect_64->size;
+#if 0
+#include "MachoMem.h"
+__attribute__((constructor)) void hook_svc_x80() {
+  const section_64_info_t *sect64;
+  zaddr svc_x80_addr;
+  zaddr curr_addr, end_addr;
+  uint32_t svc_x80_byte = 0xd4001001;
+  MachoMem *mem = new MachoMem();
+  mem->parse_macho();
+  sect64 = mem->get_sect_by_name("__text");
+  curr_addr = sect64->sect_addr;
+  end_addr = curr_addr + sect64->sect_64->size;
 
-//   ZzInitialize();
-//   while (curr_addr < end_addr) {
-//     svc_x80_addr = mem->macho_search_data(curr_addr, sect64->sect_addr + sect64->sect_64->size, (const zbyte *)&svc_x80_byte, 4);
-//     if (svc_x80_addr) {
-//       NSLog(@"hook svc #0x80 at %p with aslr (%p without aslr)",
-//             (void *)svc_x80_addr, (void *)(svc_x80_addr - mem->m_aslr_slide));
-//       ZzBuildHookAddress((void *)svc_x80_addr, (void *)(svc_x80_addr + 4),
-//                          hook_svc_pre_call, hook_svc_half_call);
-//       ZzEnableHook((void *)svc_x80_addr);
-//       curr_addr = svc_x80_addr + 4;
-//     } else {
-//       break;
-//     }
-//   }
-// }
+  ZzInitialize();
+  while (curr_addr < end_addr) {
+    svc_x80_addr = mem->macho_search_data(curr_addr, sect64->sect_addr + sect64->sect_64->size, (const zbyte *)&svc_x80_byte, 4);
+    if (svc_x80_addr) {
+      NSLog(@"hook svc #0x80 at %p with aslr (%p without aslr)",
+            (void *)svc_x80_addr, (void *)(svc_x80_addr - mem->m_aslr_slide));
+      ZzBuildHookAddress((void *)svc_x80_addr, (void *)(svc_x80_addr + 4),
+                         hook_svc_pre_call, hook_svc_half_call);
+      ZzEnableHook((void *)svc_x80_addr);
+      curr_addr = svc_x80_addr + 4;
+    } else {
+      break;
+    }
+  }
+}
+#endif
 
 /* 2. use zzdeps */
 
@@ -241,42 +247,45 @@ __attribute__((constructor)) void hook_svc_x80() {
     }
 }
 
-// --- end ---
+// ============= end =============
 
 
-// --- svc #0x80 bypass ---
-// __attribute__((constructor)) void patch_svc_x80_with_nop() {
-//   const section_64_info_t *sect64;
-//   zaddr svc_x80_addr;
-//   zaddr curr_addr, end_addr;
-//   uint32_t svc_x80_byte = 0xd4001001;
-//   MachoMem *mem = new MachoMem();
-//   mem->parse_macho();
-//   // mem->parse_dyld();
-//   sect64 = mem->get_sect_by_name("__text");
-//   curr_addr = sect64->sect_addr;
-//   end_addr = curr_addr + sect64->sect_64->size;
+// ============= svc #0x80 bypass with `RuntimeCodePatch` =============
+#if 0
+__attribute__((constructor)) void patch_svc_x80_with_nop() {
+    zaddr svc_x80_addr;
+    zaddr curr_addr, text_start_addr, text_end_addr;
+    uint32_t svc_x80_byte = 0xd4001001;
+    
+    const struct mach_header *header = _dyld_get_image_header(0);
+    struct segment_command_64 *seg_cmd_64 = zz_macho_get_segment_64_via_name((struct mach_header_64 *)header, (char *)"__TEXT");
+    zsize slide = (zaddr)header - (zaddr)seg_cmd_64->vmaddr;
+    
+    struct section_64 *sect_64 = zz_macho_get_section_64_via_name((struct mach_header_64 *)header, (char *)"__text");
+    
+    text_start_addr = slide + (zaddr)sect_64->addr;
+    text_end_addr = text_start_addr + sect_64->size;
+    curr_addr = text_start_addr;
 
-//   ZzInitialize();
-//   while (curr_addr < end_addr) {
-//     svc_x80_addr = mem->macho_search_data(
-//         sect64->sect_addr, sect64->sect_addr + sect64->sect_64->size,
-//         (const zbyte *)&svc_x80_byte, 4);
-//     if (svc_x80_addr) {
-//       NSLog(@"patch svc #0x80 with 'nop' at %p with aslr (%p without aslr)",
-//             (void *)svc_x80_addr, (void *)(svc_x80_addr -
-//             mem->m_aslr_slide));
-//       unsigned long nop_bytes = 0xD503201F;
-//       ZzRuntimeCodePatch(svc_x80_addr, (zpointer)&nop_bytes, 4);
-//       curr_addr = svc_x80_addr + 4;
-//     } else {
-//       break;
-//     }
-//   }
-// }
-// --- end ---
+    while (curr_addr < text_end_addr) {
+        svc_x80_addr = (zaddr)zz_vm_search_data((zpointer)curr_addr, (zpointer)text_end_addr, (zbyte *)&svc_x80_byte, 4);
+        if (svc_x80_addr) {
+      NSLog(@"patch svc #0x80 with 'nop' at %p with aslr (%p without aslr)",
+            (void *)svc_x80_addr, (void *)(svc_x80_addr -
+            slide));
+      unsigned long nop_bytes = 0xD503201F;
+      ZzRuntimeCodePatch(svc_x80_addr, (zpointer)&nop_bytes, 4);
+      curr_addr = svc_x80_addr + 4;
+    } else {
+      break;
+    }
+  }
+}
+#endif
+// ============= end =============
 
 
+// ============= [zzdeps](https://github.com/jmpews/zzdeps) =============
 struct section_64 *
 zz_macho_get_section_64_via_name(struct mach_header_64 *header,
                                  char *sect_name) {
@@ -375,3 +384,4 @@ zz_macho_get_segment_64_via_name(struct mach_header_64 *header,
     }
     return NULL;
 }
+// ============= end =============
