@@ -1,15 +1,19 @@
-## HookZzModules
+# HookZzModules
 
-modules dep on [HookZz](https://github.com/jmpews/HookZz) and [MachoParser](https://github.com/jmpews/MachoParser)
+modules dep on [HookZz](https://github.com/jmpews/HookZz)
 
 ## [AntiDebugByPass](./AntiDebugBypass)
 
 bypass anti-debug, such as `ptrace`, `syscall`, `sysctl` and `svc #0x80`.
 
-[Move to detail](http://jmpews.github.io/)
-
 ## [AntiDebug](./AntiDebug)
 
 common anti-debug methods.
 
-[Move to detail](http://jmpews.github.io/)
+## [hook_objc_msgSend](./hook_objc_msgSend)
+
+hook objc_msgSend in a simple way.
+
+## [hook_MGCopyAnswer](./hook_MGCopyAnswer)
+
+hook MGCopyAnswer in a simple way.
