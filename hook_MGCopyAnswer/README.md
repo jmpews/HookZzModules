@@ -1,4 +1,4 @@
-## hook_MGCopyAnswer
+# hook_MGCopyAnswer
 
 **You need to specify the `Hookz` path, and the build dylib's `-install_name` in `makefile`.**
 
@@ -37,7 +37,7 @@ libMobileGestalt.dylib`___lldb_unnamed_symbol64$$libMobileGestalt.dylib:
     0x1831142b0 <+20>: sub    sp, sp, #0x30             ; =0x30 
 ```
 
-#### hook with `pre_call` & `post_call`
+## 1. hack with `pre_call` & `post_call`
 
 ```c
 void MGCopyAnswer_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
@@ -62,7 +62,7 @@ void MGCopyAnswer_post_call(RegState *rs, ThreadStack *threadstack, CallStack *c
 }
 ```
 
-#### hook with `replace_call`
+## 2. hack with `replace_call`
 
 ```c
 static CFPropertyListRef (*orig_MGCopyAnswer)(CFStringRef prop);

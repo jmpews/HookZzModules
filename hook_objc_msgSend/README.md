@@ -1,8 +1,8 @@
-## hook_objc_msgSend
+# hook_objc_msgSend
 
 **You need to specify the `Hookz` path, and the build dylib's `-install_name` in `makefile`.**
 
-because of `objc_msgSend` call so often, must specify where log start and end.
+`objc_msgSend` call very frequently , must specify where log start and end.
 
 with filter `object_getClassName(class_addr)`, you can do more Interesting job.
 
@@ -19,7 +19,7 @@ void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *ca
 }
 ```
 
-#### inject to `Wechat`.
+## Inject to `Wechat`.
 
 ```
 2017-08-28 21:15:50.563 WeChat[683:180872] thread-id: 6993719296 | --- [WSConfigUtil configPath]
