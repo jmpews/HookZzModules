@@ -48,7 +48,7 @@ char decollators[128] = {0};
   [self hook_objc_msgSend];
 }
 
-void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *stack) {
+void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
     char *sel_name = (char *)rs->general.regs.x1;
     if(sel_name > log_start_addr && sel_name < log_end_addr) {
         memset(decollators, 45, 128);
@@ -59,7 +59,7 @@ void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *st
     }
 }
 
-void ojbc_msgSend_post_call(RegState *rs, ThreadStack *threadstack, CallStack *stack) {
+void ojbc_msgSend_post_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
 }
 
 + (void)hook_objc_msgSend {
