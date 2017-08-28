@@ -46,7 +46,7 @@ WARN_COLOR=\x1b[33;01m
 #-Wl,-undefined,dynamic_lookup 
 
 darwin.ios : $(SOURCES_O)
-	$(ZZ_GCC_BIN) $(INCLUDE_DIR) $(CFLAGS) $(LDFLAGS) -arch arm64 -framework Foundation -dynamiclib -Wl,-undefined,dynamic_lookup $(SOURCES_O) -o hook_objc_msgSend.dylib
+	$(ZZ_GCC_BIN) $(INCLUDE_DIR) $(CFLAGS) $(LDFLAGS) -arch arm64 -framework Foundation -dynamiclib -install_name @executable_path/Frameworks/hook_objc_msgSend.dylib -Wl,-undefined,dynamic_lookup $(SOURCES_O) -o hook_objc_msgSend.dylib
 	@echo "$(OK_COLOR)build [test] success for arm64(IOS)! $(NO_COLOR)"
 
 $(SOURCES_O): %.o : %.m

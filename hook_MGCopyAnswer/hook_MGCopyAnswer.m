@@ -30,6 +30,19 @@
   [self hookMGCopyAnswer];
 }
 
+NSString *RequestMG(NSString *req) {
+    static NSString *response = nil;
+
+    void *lib = dlopen("/usr/lib/libMobileGestalt.dylib", RTLD_NOW);
+    CFStringRef (*MGCopyAnswer_ptr)(CFStringRef property) = dlsym(lib, "MGCopyAnswer");
+    
+    response = (__bridge NSString*)MGCopyAnswer_ptr((__bridge CFStringRef)req);
+    if (!response) {
+        response = @"unknown";
+    }
+    
+    return response;
+}
 void MGCopyAnswer_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
     CFStringRef request = (CFStringRef)rs->general.regs.x0;
     STACK_SET(callstack, "request", request, CFStringRef);
@@ -42,7 +55,9 @@ void MGCopyAnswer_post_call(RegState *rs, ThreadStack *threadstack, CallStack *c
         CFPropertyListRef result = (CFPropertyListRef)rs->general.regs.x0;
         if( [(__bridge NSString *) request isEqualToString:@"CPUArchitecture"] && [(__bridge NSString *) result isEqualToString:@"123456"]) {
             CFStringRef zzarch = CFSTR("654321");
-            rs->general.regs.x0 = (void *)zzarch;
+            CFStringRef *tmp = (CFStringRef *)&rs->general.regs.x0;
+            *tmp = zzarch;
+            // rs->general.regs.x0 = (void *)zzarch;
         }
             
         NSLog(@"result is: %@", result);
@@ -68,5 +83,7 @@ CFPropertyListRef new_MGCopyAnswer(CFStringRef prop) {
     void *MGCopyAnswer_addr = dlsym(lib, "MGCopyAnswer");
     ZzBuildHook((void *)MGCopyAnswer_addr, new_MGCopyAnswer, &orig_MGCopyAnswer, MGCopyAnswer_pre_call, MGCopyAnswer_post_call);
     ZzEnableHook((void *)MGCopyAnswer_addr);
+
+    NSLog(@"MGResponse: %@", RequestMG(@"CPUArchitecture"));
 }
 @end
