@@ -1,9 +1,12 @@
 
 [Copy From My Blog](http://jmpews.github.io/2017/08/09/darwin/%E5%8F%8D%E8%B0%83%E8%AF%95%E5%8F%8A%E7%BB%95%E8%BF%87/)
+**任何带特征的检测都是不安全的 & 隐而不发**
 
-**[AntiDebugBypass on github](https://github.com/jmpews/HookZzModules/tree/master/AntiDebugBypass)**
+**[Move to AntiDebugBypass on github](https://github.com/jmpews/HookZzModules/tree/master/AntiDebugBypass)**
 
-**代码依赖于 [HookZz](https://github.com/jmpews/HookZz), [MachoParser](https://github.com/jmpews/MachoParser)**
+**代码依赖于 [HookZz](https://github.com/jmpews/HookZz)**
+
+HookZz, 是一个 hook 框架.
 
 ## 前言
 
@@ -64,48 +67,46 @@ ptrace 反调试可以使用四种方法实现.
 
 **1. 直接使用 ptrace 函数**
 
+这里使用的是 `dlopen` + `dysym`.
+
 ```
-#if !defined(PT_DENY_ATTACH)
-#define PT_DENY_ATTACH 31
-#endif
 typedef int (*PTRACE_T)(int request, pid_t pid, caddr_t addr, int data);
-
-// ------------------------------------------------------------------
-
-static void AntiDebug_ptrace() {
+static void AntiDebug_001() {
     void *handle = dlopen(NULL, RTLD_GLOBAL | RTLD_NOW);
     PTRACE_T ptrace_ptr = dlsym(handle, "ptrace");
     ptrace_ptr(PT_DENY_ATTACH, 0, 0, 0);
 }
 ```
 
+当然也可以基于 runtime 符号查找.
+
+```
+// runtime to get symbol address, but must link with `
+// -Wl,-undefined,dynamic_lookup` or you can use `dlopen` and `dlsym`
+extern int ptrace(int request, pid_t pid, caddr_t addr, int data);
+static void AntiDebug_002() { ptrace(PT_DENY_ATTACH, 0, 0, 0); }
+```
+
 **2. 使用 syscall 实现**
 
 ```
-#include <sys/syscall.h>
-#if !defined(SYS_ptrace)
-#define SYS_ptrace 26
-#endif
-void AntiDebug_syscall() { syscall(SYS_ptrace, PT_DENY_ATTACH, 0, 0, 0); }
+void AntiDebug_005() { syscall(SYS_ptrace, PT_DENY_ATTACH, 0, 0, 0); }
 ```
-
 
 **3. 内联 svc + ptrace 实现**
 
 其实这种方法等同于直接使用 ptrace, 此时系统调用号是 `SYS_ptrace`
 
 ```
-static __attribute__((always_inline)) void AntiDebug_svc() {
+static __attribute__((always_inline)) void AntiDebug_003() {
 #ifdef __arm64__
-    __asm__(
-        "mov X0, #31\n"
-        "mov X1, #0\n"
-        "mov X2, #0\n"
-        "mov X3, #0\n"
-        "mov w16, #26\n"
-        "svc #0x80");
+    __asm__("mov X0, #31\n"
+            "mov X1, #0\n"
+            "mov X2, #0\n"
+            "mov X3, #0\n"
+            "mov w16, #26\n"
+            "svc #0x80");
 #endif
-    return;
 }
 ```
 
@@ -114,18 +115,16 @@ static __attribute__((always_inline)) void AntiDebug_svc() {
 其实这种方法等同于使用 `syscall(SYS_ptrace, PT_DENY_ATTACH, 0, 0, 0)`, 这里需要注意, 此时的系统调用号是 0, 也就是 `SYS_syscall`
 
 ```
-static __attribute__((always_inline)) void AntiDebug_svc_syscall_syscall() {
+static __attribute__((always_inline)) void AntiDebug_004() {
 #ifdef __arm64__
-    __asm__(
-        "mov X0, #26\n"
-        "mov X1, #31\n"
-        "mov X2, #0\n"
-        "mov X3, #0\n"
-        "mov X4, #0\n"
-        "mov w16, #0\n"
-        "svc #0x80");
+    __asm__("mov X0, #26\n"
+            "mov X1, #31\n"
+            "mov X2, #0\n"
+            "mov X3, #0\n"
+            "mov X4, #0\n"
+            "mov w16, #0\n"
+            "svc #0x80");
 #endif
-    return;
 }
 ```
 
@@ -156,16 +155,16 @@ USER_TRAP_SPC(0x82,idt64_mdep_scall)
  * is saved to the error code slot in the stack frame. We then branch to the
  * common state saving code.
  */
-    
+		
 #ifndef UNIX_INT
 #error NO UNIX INT!!!
 #endif
 Entry(idt64_unix_scall)
-  swapgs        /* switch to kernel gs (cpu_data) */
-  pushq %rax      /* save system call number */
-  PUSH_FUNCTION(HNDL_UNIX_SCALL)
-  pushq $(UNIX_INT)
-  jmp L_32bit_entry_check
+	swapgs				/* switch to kernel gs (cpu_data) */
+	pushq	%rax			/* save system call number */
+	PUSH_FUNCTION(HNDL_UNIX_SCALL)
+	pushq	$(UNIX_INT)
+	jmp	L_32bit_entry_check
 ```
 
 ```
@@ -174,51 +173,51 @@ __attribute__((noreturn))
 void
 unix_syscall64(x86_saved_state_t *state)
 {
-  thread_t  thread;
-  void      *vt;
-  unsigned int  code;
-  struct sysent *callp;
-  int   args_in_regs;
-  boolean_t args_start_at_rdi;
-  int   error;
-  struct proc *p;
-  struct uthread  *uthread;
-  x86_saved_state64_t *regs;
-  pid_t   pid;
+	thread_t	thread;
+	void			*vt;
+	unsigned int	code;
+	struct sysent	*callp;
+	int		args_in_regs;
+	boolean_t	args_start_at_rdi;
+	int		error;
+	struct proc	*p;
+	struct uthread	*uthread;
+	x86_saved_state64_t *regs;
+	pid_t		pid;
 
-  assert(is_saved_state64(state));
-  regs = saved_state64(state);
-#if DEBUG
-  if (regs->rax == 0x2000800)
-    thread_exception_return();
+	assert(is_saved_state64(state));
+	regs = saved_state64(state);
+#if	DEBUG
+	if (regs->rax == 0x2000800)
+		thread_exception_return();
 #endif
-  thread = current_thread();
-  uthread = get_bsdthread_info(thread);
+	thread = current_thread();
+	uthread = get_bsdthread_info(thread);
 
 #if PROC_REF_DEBUG
-  uthread_reset_proc_refcount(uthread);
+	uthread_reset_proc_refcount(uthread);
 #endif
 
-  /* Get the approriate proc; may be different from task's for vfork() */
-  if (__probable(!(uthread->uu_flag & UT_VFORK)))
-    p = (struct proc *)get_bsdtask_info(current_task());
-  else 
-    p = current_proc();
+	/* Get the approriate proc; may be different from task's for vfork() */
+	if (__probable(!(uthread->uu_flag & UT_VFORK)))
+		p = (struct proc *)get_bsdtask_info(current_task());
+	else 
+		p = current_proc();
 
-  /* Verify that we are not being called from a task without a proc */
-  if (__improbable(p == NULL)) {
-    regs->rax = EPERM;
-    regs->isf.rflags |= EFL_CF;
-    task_terminate_internal(current_task());
-    thread_exception_return();
-    /* NOTREACHED */
-  }
+	/* Verify that we are not being called from a task without a proc */
+	if (__improbable(p == NULL)) {
+		regs->rax = EPERM;
+		regs->isf.rflags |= EFL_CF;
+		task_terminate_internal(current_task());
+		thread_exception_return();
+		/* NOTREACHED */
+	}
 
-  code = regs->rax & SYSCALL_NUMBER_MASK;
-  DEBUG_KPRINT_SYSCALL_UNIX(
-    "unix_syscall64: code=%d(%s) rip=%llx\n",
-    code, syscallnames[code >= nsysent ? SYS_invalid : code], regs->isf.rip);
-  callp = (code >= nsysent) ? &sysent[SYS_invalid] : &sysent[code];
+	code = regs->rax & SYSCALL_NUMBER_MASK;
+	DEBUG_KPRINT_SYSCALL_UNIX(
+		"unix_syscall64: code=%d(%s) rip=%llx\n",
+		code, syscallnames[code >= nsysent ? SYS_invalid : code], regs->isf.rip);
+	callp = (code >= nsysent) ? &sysent[SYS_invalid] : &sysent[code];
 
 ```
 
@@ -226,53 +225,87 @@ unix_syscall64(x86_saved_state_t *state)
 
 ```
 xnu-3789.41.3/bsd/kern/syscall.h
-#define SYS_setuid         23
-#define SYS_getuid         24
-#define SYS_geteuid        25
-#define SYS_ptrace         26
-#define SYS_recvmsg        27
-#define SYS_sendmsg        28
+#define	SYS_setuid         23
+#define	SYS_getuid         24
+#define	SYS_geteuid        25
+#define	SYS_ptrace         26
+#define	SYS_recvmsg        27
+#define	SYS_sendmsg        28
 ```
 
 ## 反调试检测
 
-这里主要是调试器的检测手段, 很多检测到调试器后使用 `exit(-1)` 退出程序. 这里很容易让 cracker 断点到 `exit` 函数上. 其实有一个 trick 就是利用利用系统异常造成 crash. 比如: 操作无效内存地址. 或者覆盖/重写 `__TEXT` 内容(debugmode 模式下可以对 `rx-` 内存进行操作)
+这里主要是调试器的检测手段, 很多检测到调试器后使用 `exit(-1)` 退出程序. 这里很容易让 cracker 断点到 `exit` 函数上. 其实有一个 trick 就是利用利用系统异常造成 crash. 比如: 操作无效内存地址. 或者覆盖/重写 `__TEXT` 内容(debugmode 模式下可以对 `rx-` 内存进行操作).
+
+或者利用内联汇编实现退出, 并清除堆栈(防止暴力 `svc patch with nop`).
+
+```
+static __attribute__((always_inline)) void asm_exit() {
+#ifdef __arm64__
+    __asm__("mov X0, #0\n"
+            "mov w16, #1\n"
+            "svc #0x80\n"
+
+            "mov x1, #0\n"
+            "mov sp, x1\n"
+            "mov x29, x1\n"
+            "mov x30, x1\n"
+            "ret");
+#endif
+}
+```
 
 #### 使用 sysctl 检测
 
+这里在检测时也可以通过 svc 实现.
+
 ```
-#include <sys/sysctl.h>
-#include <unistd.h>
 static int DetectDebug_sysctl() __attribute__((always_inline));
 int DetectDebug_sysctl() {
-  size_t size = sizeof(struct kinfo_proc);
-  struct kinfo_proc info;
-  int ret, name[4];
-
-  memset(&info, 0, sizeof(struct kinfo_proc));
-
-  name[0] = CTL_KERN;
-  name[1] = KERN_PROC;
-  name[2] = KERN_PROC_PID;
-  name[3] = getpid();
-
-  if ((ret = (sysctl(name, 4, &info, &size, NULL, 0)))) {
-    return ret; // sysctl() failed for some reason
-  }
-  return (info.kp_proc.p_flag & P_TRACED) ? 1 : 0;
+    size_t size = sizeof(struct kinfo_proc);
+    struct kinfo_proc info;
+    int ret, name[4];
+    
+    memset(&info, 0, sizeof(struct kinfo_proc));
+    
+    name[0] = CTL_KERN;
+    name[1] = KERN_PROC;
+    name[2] = KERN_PROC_PID;
+    name[3] = getpid();
+    
+#if 0
+    if ((ret = (sysctl(name, 4, &info, &size, NULL, 0)))) {
+        return ret; // sysctl() failed for some reason
+    }
+#else
+    // or change as `AntiDebug_003` and `AntiDebug_004`
+    // https://www.ibiblio.org/gferg/ldp/GCC-Inline-Assembly-HOWTO.html
+    __asm__ volatile("mov x0, %[name_ptr]\n"
+                     "mov x1, #4\n"
+                     "mov x2, %[info_ptr]\n"
+                     "mov x3, %[size_ptr]\n"
+                     "mov x4, #0\n"
+                     "mov x5, #0\n"
+                     "mov w16, #202\n"
+                     "svc #0x80"
+                     :
+                     : [name_ptr] "r"(name), [info_ptr] "r"(&info),
+                     [size_ptr] "r"(&size));
+#endif
+    
+    return (info.kp_proc.p_flag & P_TRACED) ? 1 : 0;
 }
 
-void AntiDebug_sysctl() {
-  if (DetectDebug_sysctl()) {
-    exit(1);
-  }
+void AntiDebug_006() {
+    if (DetectDebug_sysctl()) {
+        asm_exit();
+    }
 }
 ```
 
 #### 使用 isatty 检测
 
 ```
-
 #include <unistd.h>
 void AntiDebug_isatty() {
   if (isatty(1)) {
@@ -294,6 +327,54 @@ void AntiDebug_ioctl() {
 }
 ```
 
+#### svc 完整性检测
+
+上述的 svc 反调试手段, 可以通过 patch `svc #0x80` with `nop` 轻松绕过. 所以需要校验 svc 是否被 patch, 一个想当然的方法是在正常的代码中使用 svc 进行 coding, 仔细想想并不合适.
+
+所以另一个想法就是, 使用 svc 实现一个小功能, 之后检测 x0 返回值. 这里使用的是 `getpid()`.
+
+tips: `longjmp` 本来是用在异常时恢复状态, 这里由于未保存状态. 所以可以让攻击者不能对退出进行断点. 
+
+这里使用, 下面一小段内联汇编可以达到相同的目的.
+
+```
+"mov x1, #0\n"
+"mov sp, x1\n"
+"mov x29, x1\n"
+"mov x30, x1\n"
+"ret\n"
+```
+
+```
+static __attribute__((always_inline)) void check_svc_integrity() {
+    int pid;
+    static jmp_buf protectionJMP;
+#ifdef __arm64__
+    __asm__("mov x0, #0\n"
+            "mov w16, #20\n"
+            "svc #0x80\n"
+            "cmp x0, #0\n"
+            "b.ne #24\n"
+            
+            "mov x1, #0\n"
+            "mov sp, x1\n"
+            "mov x29, x1\n"
+            "mov x30, x1\n"
+            "ret\n"
+            
+            "mov %[result], x0\n"
+            : [result] "=r" (pid)
+            :
+            :
+            );
+    
+    if(pid == 0) {
+        longjmp(protectionJMP, 1);
+    }
+#endif
+}
+```
+
 ## 绕过
 
 对于使用函数进行反调试可以使用 hook 轻松绕过, 具体的实现, 直接看代码.
@@ -312,57 +393,49 @@ void AntiDebug_ioctl() {
 
 这里不要使用 `large structure`, gcc 会使用 `memcopy` 最终传入的其实是地址. 大部分注释请参考下文.
 
+![WX20170810-003735@2x.png](/images/WX20170810-003735@2x.png)
+
 ```
-// ptrace(int request, pid_t pid, caddr_t addr, int data);
 int (*orig_syscall)(int number, ...);
 int fake_syscall(int number, ...) {
-  int request;
-  pid_t pid;
-  caddr_t addr;
-  int data;
-
-  // fake stack, why use `char *` ? hah
-  char *stack[8];
-
-  va_list args;
-  va_start(args, number);
-
-  // get the origin stack args copy.(must >= origin stack args)
-  memcpy(stack, args, 8 * 8);
-
-  if (number == SYS_ptrace) {
-    request = va_arg(args, int);
-    pid = va_arg(args, pid_t);
-    addr = va_arg(args, caddr_t);
-    data = va_arg(args, int);
-    va_end(args);
-    if (request == PT_DENY_ATTACH) {
-      NSLog(@"[AntiDebugBypass] catch 'syscall(SYS_ptrace, PT_DENY_ATTACH, 0, "
-            @"0, 0)' and bypass.");
-      return 0;
+    int request;
+    pid_t pid;
+    caddr_t addr;
+    int data;
+    
+    // fake stack, why use `char *` ? hah
+    char *stack[8];
+    
+    va_list args;
+    va_start(args, number);
+    
+    // get the origin stack args copy.(must >= origin stack args)
+    memcpy(stack, args, 8 * 8);
+    
+    if (number == SYS_ptrace) {
+        request = va_arg(args, int);
+        pid = va_arg(args, pid_t);
+        addr = va_arg(args, caddr_t);
+        data = va_arg(args, int);
+        va_end(args);
+        if (request == PT_DENY_ATTACH) {
+            NSLog(@"[AntiDebugBypass] catch 'syscall(SYS_ptrace, PT_DENY_ATTACH, 0, "
+                  @"0, 0)' and bypass.");
+            return 0;
+        }
+    } else {
+        va_end(args);
     }
-  } else {
-    va_end(args);
-  }
-
-  // must understand the principle of `function call`. `parameter pass` is before `switch to target`
-  // so, pass the whole `stack`, it just actually faked an original stack.
-  // Not pass a large structure,  will be replace with a `hidden memcpy`.
-  int x = orig_syscall(number, stack[0], stack[1], stack[2], stack[3], stack[4], stack[5], stack[6], stack[7]);
-  return x;
+    
+    // must understand the principle of `function call`. `parameter pass` is
+    // before `switch to target` so, pass the whole `stack`, it just actually
+    // faked an original stack. Do not pass a large structure,  will be replace with
+    // a `hidden memcpy`.
+    int x = orig_syscall(number, stack[0], stack[1], stack[2], stack[3], stack[4],
+                         stack[5], stack[6], stack[7]);
+    return x;
 }
 
-__attribute__((constructor)) void patch_ptrace_sysctl_syscall() {
-
-  ...
-
-  zpointer syscall_ptr = (void *)syscall;
-  ZZBuildHook((void *)syscall_ptr, (void *)fake_syscall, (void
-  **)&orig_syscall,
-              NULL, NULL);
-  ZZEnableHook((void *)syscall_ptr);
-}
-// --- end --
 ```
 
 **2. 使用 `pre_call` 绕过**
@@ -389,28 +462,28 @@ libsystem_kernel.dylib`__syscall:
 可以看到调用如果 `x0` 是 `SYS_ptrace`, 那么 `PT_DENY_ATTACH` 存放在 `[sp]`.
 
 ```
-// --- syscall bypass use `pre_call`
-void syscall_pre_call(struct RegState_ *rs) {
-  int num_syscall;
-  int request;
-  zpointer sp;
-  num_syscall = (int)(uint64_t)(rs->general.regs.x0);
-  if (num_syscall == SYS_ptrace) {
-    sp = (zpointer)(rs->sp);
-    request = *(int *)sp;
-    if (request == PT_DENY_ATTACH) {
-      *(long *)sp = 10;
-      NSLog(@"[AntiDebugBypass] catch 'syscall(SYS_ptrace, PT_DENY_ATTACH, 0, "
-            @"0, 0)' and bypass.");
+void syscall_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
+    int num_syscall;
+    int request;
+    zpointer sp;
+    num_syscall = (int)(uint64_t)(rs->general.regs.x0);
+    if (num_syscall == SYS_ptrace) {
+        sp = (zpointer)(rs->sp);
+        request = *(int *)sp;
+        if (request == PT_DENY_ATTACH) {
+            *(long *)sp = 10;
+            NSLog(@"[AntiDebugBypass] catch 'syscall(SYS_ptrace, PT_DENY_ATTACH, 0, "
+                  @"0, 0)' and bypass.");
+        }
     }
-  }
 }
 __attribute__((constructor)) void patch_syscall_by_pre_call() {
-  zpointer syscall_ptr = (void *)syscall;
-  ZZBuildHook((void *)syscall_ptr, NULL, NULL, (void *)syscall_pre_call, NULL);
-  ZZEnableHook((void *)syscall_ptr);
+    zpointer syscall_ptr = (void *)syscall;
+    #if 0
+    ZzBuildHook((void *)syscall_ptr, NULL, NULL, syscall_pre_call, NULL);
+    ZzEnableHook((void *)syscall_ptr);
+    #endif
 }
-
 // --- end ---
 ```
 
@@ -418,69 +491,86 @@ __attribute__((constructor)) void patch_syscall_by_pre_call() {
 
 这里介绍关键是介绍如何对 svc 反调试的绕过.
 
-上面已经对 svc 进行了简单的介绍. 所以理所当然想到的是希望通过 `syscall hook`, 劫持 `system call table(sysent)` . 这里相当于实现 `syscall hook`. 但是难点之一是需要找到 `system call table(sysent)`, 这一步可以通过 [joker](http://newosxbook.com/tools/joker.html), 对于 IOS 10.x 可以参考 `http://ioshackerwiki.com/syscalls/`, 难点之二是作为 kext 加载. 可以参考 **附录**.
+上面已经对 svc 进行了简单的介绍. 所以理所当然想到的是希望通过 `syscall hook`, 劫持 `system call table(sysent)` . 这里相当于实现 `syscall hook`. 但是难点之一是需要找到 `system call table(sysent)`, 这一步可以通过 [joker](http://newosxbook.com/tools/joker.html), 对于 IOS 10.x 可以参考 `http://ioshackerwiki.com/syscalls/`, 难点之二是作为 kext 加载. 可以参考 **附录**, 对于具体的 `kernel patch` 没有做过深入研究, 应该可以参考 [comex 的 datautils0](https://github.com/comex/datautils0)
 
-ok, 接下来使用另一种思路对绕过, 其实也就是 `code patch` + `inlinehook`. 对 `__TEXT` 扫描 `svc #0x80` 指令, 对于 cracker 来说, 在 `__TEXT` 段使用 `svc #0x80` 具有一定的反调试可能, 所以需要对 `svc #0x80` 进行 `inlinehook`, 这里并不直接对 `svc $0x80` 进行覆盖操作, 可能有正常系统调用.
+ok, 接下来使用另一种思路对绕过, 其实也就是 `code patch` + `inlinehook`. 对 `__TEXT` 扫描 `svc #0x80` 指令, 对于 cracker 来说, 在 `__TEXT` 段使用 `svc #0x80` 具有一定的反调试可能, 所以需要对 `svc #0x80` 进行 `inlinehook`, 这里并不直接对 `svc #0x80` 进行覆盖操作, 可能有正常系统调用.
 
-以下代码依赖于 [HookZz](https://github.com/jmpews/HookZz), [MachoParser](https://github.com/jmpews/MachoParser)
+以下代码依赖于 [HookZz](https://github.com/jmpews/HookZz)).
 
 大致原理就是先搜索到 `svc #0x80` 指令后, 对该指令地址进行 hook, 之后使用 `pre_call` 修改寄存器的值.
 
 ```
-// --- svc #0x80 bypass ---
-
-#include "MachoMem.h"
-void patch_svc_pre_call(struct RegState_ *rs) {
-  int num_syscall;
-  int request;
-  num_syscall = (int)(uint64_t)(rs->general.regs.x16);
-  request = (int)(uint64_t)(rs->general.regs.x0);
-
-  if (num_syscall == SYS_syscall) {
-    int arg1 = (int)(uint64_t)(rs->general.regs.x1);
-    if (request == SYS_ptrace && arg1 == PT_DENY_ATTACH) {
-      *(unsigned long *)(&rs->general.regs.x1) = 10;
-      NSLog(@"[AntiDebugBypass] catch 'SVC #0x80; syscall(ptrace)' and bypass");
-    }
-  } else if (num_syscall == SYS_ptrace) {
+void hook_svc_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
+    int num_syscall;
+    int request;
+    num_syscall = (int)(uint64_t)(rs->general.regs.x16);
     request = (int)(uint64_t)(rs->general.regs.x0);
-    if (request == PT_DENY_ATTACH) {
-      *(unsigned long *)(&rs->general.regs.x1) = 10;
-      NSLog(@"[AntiDebugBypass] catch 'SVC-0x80; ptrace' and bypass");
+    
+    if (num_syscall == SYS_syscall) {
+        int arg1 = (int)(uint64_t)(rs->general.regs.x1);
+        if (request == SYS_ptrace && arg1 == PT_DENY_ATTACH) {
+            *(unsigned long *)(&rs->general.regs.x1) = 10;
+            NSLog(@"[AntiDebugBypass] catch 'SVC #0x80; syscall(ptrace)' and bypass");
+        }
+        
+    } else if (num_syscall == SYS_ptrace) {
+        request = (int)(uint64_t)(rs->general.regs.x0);
+        if (request == PT_DENY_ATTACH) {
+            *(unsigned long *)(&rs->general.regs.x0) = 10;
+            NSLog(@"[AntiDebugBypass] catch 'SVC-0x80; ptrace' and bypass");
+        }
+    } else if(num_syscall == SYS_sysctl) {
+        STACK_SET(callstack, (char *)"num_syscall", num_syscall, int);
+        STACK_SET(callstack, (char *)"info_ptr", rs->general.regs.x2, zpointer);
     }
-  }
 }
-__attribute__((constructor)) void patch_svc_x80() {
-  const section_64_info_t *sect64;
-  zaddr svc_x80_addr;
-  zaddr curr_addr, end_addr;
-  uint32_t svc_x80_byte = 0xd4001001;
-  MachoMem *mem = new MachoMem();
-  mem->parse_macho();
-  // mem->parse_dyld();
-  sect64 = mem->get_sect_by_name("__text");
-  curr_addr = sect64->sect_addr;
-  end_addr = curr_addr + sect64->sect_64->size;
 
-  ZZInitialize();
-  while (curr_addr < end_addr) {
-    svc_x80_addr = mem->macho_search_data(
-        sect64->sect_addr, sect64->sect_addr + sect64->sect_64->size,
-        (const zbyte *)&svc_x80_byte, 4);
-    if (svc_x80_addr) {
-      NSLog(@"find svc #0x80 at %p with aslr (%p without aslr)",
-            (void *)svc_x80_addr, (void *)(svc_x80_addr - mem->m_aslr_slide));
-      ZZBuildHook((void *)svc_x80_addr, NULL, NULL,
-                  (zpointer)patch_svc_pre_call, NULL);
-      ZZEnableHook((void *)svc_x80_addr);
-      curr_addr = svc_x80_addr + 4;
-    } else {
-      break;
+void hook_svc_half_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
+    // emmm... little long...
+    if(STACK_CHECK_KEY(callstack, (char *)"num_syscall")) {
+        int num_syscall = STACK_GET(callstack, (char *)"num_syscall", int);
+        struct kinfo_proc *info = STACK_GET(callstack, (char *)"info_ptr", struct kinfo_proc *);
+        if (num_syscall == SYS_sysctl)
+        {
+            NSLog(@"[AntiDebugBypass] catch 'SVC-0x80; sysctl' and bypass");
+            info->kp_proc.p_flag &= ~(P_TRACED);
+        }
     }
-  }
 }
-// --- end ---
+
+__attribute__((constructor)) void hook_svc_x80() {
+    zaddr svc_x80_addr;
+    zaddr curr_addr, text_start_addr, text_end_addr;
+    uint32_t svc_x80_byte = 0xd4001001;
+    
+    const struct mach_header *header = _dyld_get_image_header(0);
+    struct segment_command_64 *seg_cmd_64 = zz_macho_get_segment_64_via_name((struct mach_header_64 *)header, (char *)"__TEXT");
+    zsize slide = (zaddr)header - (zaddr)seg_cmd_64->vmaddr;
+    
+    struct section_64 *sect_64 = zz_macho_get_section_64_via_name((struct mach_header_64 *)header, (char *)"__text");
+    
+    text_start_addr = slide + (zaddr)sect_64->addr;
+    text_end_addr = text_start_addr + sect_64->size;
+    curr_addr = text_start_addr;
+    
+    while (curr_addr < text_end_addr) {
+        svc_x80_addr = (zaddr)zz_vm_search_data((zpointer)curr_addr, (zpointer)text_end_addr, (zbyte *)&svc_x80_byte, 4);
+        if (svc_x80_addr) {
+            NSLog(@"hook svc #0x80 at %p with aslr (%p without aslr)",
+                  (void *)svc_x80_addr, (void *)(svc_x80_addr - slide));
+            ZzBuildHookAddress((void *)svc_x80_addr, (void *)(svc_x80_addr + 4),
+                               hook_svc_pre_call, hook_svc_half_call);
+            ZzEnableHook((void *)svc_x80_addr);
+            curr_addr = svc_x80_addr + 4;
+        } else {
+            break;
+        }
+    }
+}
+
 ```
+
+**[Move to AntiDebugBypass](https://github.com/jmpews/HookZzModules/tree/master/AntiDebugBypass)**
 
 ## 总结
 
@@ -494,4 +584,5 @@ http://siliconblade.blogspot.jp/2013/07/offensive-volatility-messing-with-os-x.h
 https://www.defcon.org/images/defcon-17/dc-17-presentations/defcon-17-bosse_eriksson-kernel_patching_on_osx.pdf
 http://d.hatena.ne.jp/hon53/20100926/1285476759
 https://papers.put.as/papers/ios/2011/SysScan-Singapore-Targeting_The_IOS_Kernel.pdf
+https://www.blackhat.com/docs/us-15/materials/us-15-Diquet-TrustKit-Code-Injection-On-iOS-8-For-The-Greater-Good.pdf
 ```
