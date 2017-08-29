@@ -18,18 +18,18 @@ SOURCES_O = $(patsubst %.mm,%.o, $(SOURCES))
 OUTPUT_DIR = build
 
 # hookzz framework
-HOOKZZ_INCLUDE = /Users/jmpews/Desktop/SpiderZz/project/HookZz/include
-HOOKZZ_LIB_DIR = /Users/jmpews/Desktop/SpiderZz/project/HookZz/build
+HOOKZZ_INCLUDE = $(abspath ../HookZz/include)
+HOOKZZ_LIB_DIR = $(abspath ../HookZz)
 HOOKZZ_LIB = hookzz.static
 
-# macho parser
-MACHOPARSER_INCLUDE = /Users/jmpews/Desktop/SpiderZz/project/MachoParser/include
-MACHOPARSER_LIB_DIR = /Users/jmpews/Desktop/SpiderZz/project/MachoParser/build
-MACHOPARSER_LIB = machoparser.static
+# # macho parser
+# MACHOPARSER_INCLUDE = /Users/jmpews/Desktop/SpiderZz/project/MachoParser/include
+# MACHOPARSER_LIB_DIR = /Users/jmpews/Desktop/SpiderZz/project/MachoParser/build
+# MACHOPARSER_LIB = machoparser.static
 
-INCLUDE_DIR = -I$(HOOKZZ_INCLUDE) -I$(MACHOPARSER_INCLUDE)
-LIB_DIR = -L$(HOOKZZ_LIB_DIR) -L$(MACHOPARSER_LIB_DIR)
-LIBS = -l$(HOOKZZ_LIB) -l$(MACHOPARSER_LIB)
+INCLUDE_DIR = -I$(HOOKZZ_INCLUDE)
+LIB_DIR = -L$(HOOKZZ_LIB_DIR)
+LIBS = -l$(HOOKZZ_LIB)
 
 # c
 CFLAGS = -O0 -g

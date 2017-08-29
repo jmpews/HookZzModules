@@ -18,8 +18,8 @@ SOURCES_O = $(patsubst %.m,%.o, $(SOURCES))
 OUTPUT_DIR = build
 
 # hookzz framework
-HOOKZZ_INCLUDE = /Users/jmpews/Desktop/SpiderZz/project/HookZz/include
-HOOKZZ_LIB_DIR = /Users/jmpews/Desktop/SpiderZz/project/HookZz/build
+HOOKZZ_INCLUDE = $(abspath ../HookZz/include)
+HOOKZZ_LIB_DIR = $(abspath ../HookZz)
 HOOKZZ_LIB = hookzz.static
 
 INCLUDE_DIR = -I$(HOOKZZ_INCLUDE)
