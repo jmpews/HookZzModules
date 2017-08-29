@@ -1,6 +1,6 @@
 # HookZzModules
 
-modules dep on [HookZz](https://github.com/jmpews/HookZz)
+modules dep on [HookZz(temporary private repo)](https://github.com/jmpews/HookZz)
 
 ## [AntiDebugByPass](./AntiDebugBypass)
 
