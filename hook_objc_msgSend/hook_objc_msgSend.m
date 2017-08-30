@@ -54,7 +54,7 @@ void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *ca
         memset(decollators, 45, 128);
         decollators[threadstack->size * 3] = '\0';
         void *class_addr = (void *)rs->general.regs.x0;
-        char *class_name = object_getClassName(class_addr);
+        char *class_name = ((const char *(*)(void *))object_getClassName)(class_addr);
         NSLog(@"thread-id: %ld | %s [%s %s]", threadstack->thread_id, decollators, class_name, sel_name);
     }
 }
