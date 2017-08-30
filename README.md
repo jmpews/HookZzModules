@@ -1,19 +1,27 @@
 # HookZzModules
 
-modules dep on [HookZz(temporary private repo)](https://github.com/jmpews/HookZz)
+**modules depends on [HookZz](https://github.com/jmpews/HookZz), a hook framework.**
 
-## [AntiDebugByPass](./AntiDebugBypass)
+## 1. [AntiDebugByPass](./AntiDebugBypass)
 
 bypass anti-debug, such as `ptrace`, `syscall`, `sysctl` and `svc #0x80`.
 
-## [AntiDebug](./AntiDebug)
+[move to readme.md](./AntiDebugBypass)
 
-common anti-debug methods.
+## 2. [AntiDebug](./AntiDebug)
 
-## [hook_objc_msgSend](./hook_objc_msgSend)
+anti-debug tricks.
+
+[move to readme.md](./AntiDebugBypass)
+
+## 3. [hook_objc_msgSend](./hook_objc_msgSend)
 
 hook objc_msgSend in a simple way.
 
-## [hook_MGCopyAnswer](./hook_MGCopyAnswer)
+[move to readme.md](./hook_objc_msgSend)
+
+## 4. [hook_MGCopyAnswer](./hook_MGCopyAnswer)
 
 hook MGCopyAnswer in a simple way.
+
+[move to readme.md](./hook_MGCopyAnswer)

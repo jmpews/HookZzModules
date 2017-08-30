@@ -1,19 +1,17 @@
 
 [Copy From My Blog](http://jmpews.github.io/2017/08/09/darwin/%E5%8F%8D%E8%B0%83%E8%AF%95%E5%8F%8A%E7%BB%95%E8%BF%87/)
 
-**任何带特征的检测都是不安全的 & 隐而不发**
+**任何带特征的检测都是不安全的 & 隐而不发(@Ouroboros)**
 
 **[Move to AntiDebugBypass on github](https://github.com/jmpews/HookZzModules/tree/master/AntiDebugBypass)**
 
-**代码依赖于 [HookZz](https://github.com/jmpews/HookZz)**
-
-HookZz, 是一个 hook 框架.
+**代码依赖于 [HookZz](https://github.com/jmpews/HookZz), 一个 hook 框架**
 
 ## 前言
 
 对于应用安全甲方一般会在这三个方面做防御. 
 
-按逻辑分类的话应该应该分为这三类, 但如果从实现原理的话, 应该分为两类, `用API实现的` 和 `不用API实现的`(这说的不用 API 实现, 不是指换成 inine 函数就行) . 首先使用 API 实现基本统统沦陷. 直接通过指令实现的机制还有一丝存活的可能.
+按逻辑分类的话应该应该分为这几类, 但如果从实现原理的话, 应该分为两类, `用API实现的` 和 `不用API实现的`(这说的不用 API 实现, 不是指换成 inine 函数就行) . 首先使用 API 实现基本统统沦陷. 直接通过指令实现的机制还有一丝存活的可能. 逻辑的话应该分为, 反调试, 反注入, 越狱检测, hook 检测.
 
 本文所有相关仅仅针对 aarch64.
 
@@ -56,6 +54,9 @@ https://opensource.apple.com/tarballs/xnu/
 // objc
 https://opensource.apple.com/tarballs/objc4/
 https://github.com/RetVal/objc-runtime (可编译)
+
+// cctools
+https://opensource.apple.com/tarballs/cctools (很全的头文件)
 ```
 
 ## 反调试
@@ -236,7 +237,7 @@ xnu-3789.41.3/bsd/kern/syscall.h
 
 ## 反调试检测
 
-这里主要是调试器的检测手段, 很多检测到调试器后使用 `exit(-1)` 退出程序. 这里很容易让 cracker 断点到 `exit` 函数上. 其实有一个 trick 就是利用利用系统异常造成 crash. 比如: 操作无效内存地址. 或者覆盖/重写 `__TEXT` 内容(debugmode 模式下可以对 `rx-` 内存进行操作).
+这里主要是调试器的检测手段, 很多检测到调试器后使用 `exit(-1)` 退出程序. 这里很容易让 cracker 断点到 `exit` 函数上. 其实有一个 trick 就是利用利用系统异常造成 crash. 比如: 覆盖/重写 `__TEXT` 内容(debugmode 模式下可以对 `rx-` 内存进行操作).
 
 或者利用内联汇编实现退出, 并清除堆栈(防止暴力 `svc patch with nop`).
 
@@ -330,9 +331,9 @@ void AntiDebug_ioctl() {
 
 #### svc 完整性检测
 
-上述的 svc 反调试手段, 可以通过 patch `svc #0x80` with `nop` 轻松绕过. 所以需要校验 svc 是否被 patch, 一个想当然的方法是在正常的代码中使用 svc 进行 coding, 仔细想想并不合适.
+上述的 svc 反调试手段, 可以通过 patch `svc #0x80` with `nop` 轻松绕过. 所以需要校验 `svc #0x80` 是否被 patch, 一个想当然的方法是在正常的代码中使用 svc 进行 coding, 仔细想想并不合适.
 
-所以另一个想法就是, 使用 svc 实现一个小功能, 之后检测 x0 返回值. 这里使用的是 `getpid()`.
+所以另一个想法就是, 使用 svc 实现一个小功能, 之后检测 `x0` 返回值. 这里使用的是 `getpid()`.
 
 tips: `longjmp` 本来是用在异常时恢复状态, 这里由于未保存状态. 所以可以让攻击者不能对退出进行断点. 
 
@@ -345,6 +346,8 @@ tips: `longjmp` 本来是用在异常时恢复状态, 这里由于未保存状�
 "mov x30, x1\n"
 "ret\n"
 ```
+
+整体的 svc 完整检测原型如下, 仅做抛砖引玉.
 
 ```
 static __attribute__((always_inline)) void check_svc_integrity() {
@@ -392,7 +395,7 @@ static __attribute__((always_inline)) void check_svc_integrity() {
 
 所以这里有一个 trick, 在 `orig_syscall(number, stack[0], stack[1], stack[2], stack[3], stack[4], stack[5], stack[6], stack[7]);` 时伪造了一个栈, 这个栈的内容和原栈相同(应该是大于等于原栈的参数内容). 虽然传递了很多参数, 如果理解 `function call` 的原理的话, 即使传递了很多参数, 但是只要栈的内容不变, 准确的说的是从低地址到高地址的栈里的内容不变(这里可能多压了很多无用的内容到栈里), 函数调用就不会变.
 
-这里不要使用 `large structure`, gcc 会使用 `memcopy` 最终传入的其实是地址. 大部分注释请参考下文.
+这里不要使用 `large structure`, 编译时会使用隐含的 `memcpy` 最终传入的其实是地址. 大部分注释请参考下文.
 
 ![WX20170810-003735@2x.png](/images/WX20170810-003735@2x.png)
 
@@ -494,7 +497,7 @@ __attribute__((constructor)) void patch_syscall_by_pre_call() {
 
 上面已经对 svc 进行了简单的介绍. 所以理所当然想到的是希望通过 `syscall hook`, 劫持 `system call table(sysent)` . 这里相当于实现 `syscall hook`. 但是难点之一是需要找到 `system call table(sysent)`, 这一步可以通过 [joker](http://newosxbook.com/tools/joker.html), 对于 IOS 10.x 可以参考 `http://ioshackerwiki.com/syscalls/`, 难点之二是作为 kext 加载. 可以参考 **附录**, 对于具体的 `kernel patch` 没有做过深入研究, 应该可以参考 [comex 的 datautils0](https://github.com/comex/datautils0)
 
-ok, 接下来使用另一种思路对绕过, 其实也就是 `code patch` + `inlinehook`. 对 `__TEXT` 扫描 `svc #0x80` 指令, 对于 cracker 来说, 在 `__TEXT` 段使用 `svc #0x80` 具有一定的反调试可能, 所以需要对 `svc #0x80` 进行 `inlinehook`, 这里并不直接对 `svc #0x80` 进行覆盖操作, 可能有正常系统调用.
+ok, 接下来使用另一种思路对绕过, 其实也就是 `code patch` + `hook address`. 对 `__TEXT` 扫描 `svc #0x80` 指令, 对于 cracker 来说, 在 `__TEXT` 段使用 `svc #0x80` 具有一定的反调试可能, 所以需要对 `svc #0x80` 进行 `hook addres`, 这里并不直接对 `svc #0x80` 进行覆盖操作.
 
 以下代码依赖于 [HookZz](https://github.com/jmpews/HookZz)).
 
@@ -586,4 +589,13 @@ https://www.defcon.org/images/defcon-17/dc-17-presentations/defcon-17-bosse_erik
 http://d.hatena.ne.jp/hon53/20100926/1285476759
 https://papers.put.as/papers/ios/2011/SysScan-Singapore-Targeting_The_IOS_Kernel.pdf
 https://www.blackhat.com/docs/us-15/materials/us-15-Diquet-TrustKit-Code-Injection-On-iOS-8-For-The-Greater-Good.pdf
+```
+
+#### ios kext load
+
+```
+https://github.com/LinusHenze/anyKextLoader
+https://github.com/Jailbreaks/trident-kloader
+https://github.com/saelo/ios-kern-utils
+https://github.com/xerub/kexty
 ```
