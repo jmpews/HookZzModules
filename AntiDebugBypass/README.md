@@ -134,7 +134,7 @@ static __attribute__((always_inline)) void AntiDebug_004() {
 
 Supervisor Call causes a Supervisor Call exception. svc 切换 `Exception Levels ` 从 `EL0(Unprivileged)` 到 `EL1(Privileged)`
 
-![C06F60DB066D85C69DC318113539A69C.jpg](/images/C06F60DB066D85C69DC318113539A69C.jpg)
+![C06F60DB066D85C69DC318113539A69C.jpg](http://jmpews.github.io/images/C06F60DB066D85C69DC318113539A69C.jpg)
 
 上面说的是指令层相关, 再说系统层相关, 使用 svc 进行系统中断调用需要明确 3 个点: 中断号, 系统调用号, 以及参数. 下面以 x86-64 举例.
 
@@ -397,7 +397,7 @@ static __attribute__((always_inline)) void check_svc_integrity() {
 
 这里不要使用 `large structure`, 编译时会使用隐含的 `memcpy` 最终传入的其实是地址. 大部分注释请参考下文.
 
-![WX20170810-003735@2x.png](/images/WX20170810-003735@2x.png)
+![WX20170810-003735@2x.png](http://jmpews.github.io/images/WX20170810-003735@2x.png)
 
 ```
 int (*orig_syscall)(int number, ...);
