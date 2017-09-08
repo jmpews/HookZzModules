@@ -34,6 +34,10 @@ zpointer log_sel_end_addr = 0;
 zpointer log_class_start_addr = 0;
 zpointer log_class_end_addr = 0;
 char decollators[128] = {0};
+
+int LOG_ALL_SEL = 0;
+int LOG_ALL_CLASS = 0;
+
 @interface HookZz : NSObject
 
 @end
@@ -60,28 +64,43 @@ char decollators[128] = {0};
 void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *callstack) {
     char *sel_name = (char *)rs->general.regs.x1;
     // No More Work Here!!! it will be slow.
-    if(sel_name > log_sel_start_addr && sel_name < log_sel_end_addr) {
+    if(LOG_ALL_SEL || (sel_name > log_sel_start_addr && sel_name < log_sel_end_addr)) {
         // bad code! correct-ref: https://github.com/DavidGoldman/InspectiveC/blob/299cef1c40e8a165c697f97bcd317c5cfa55c4ba/logging.mm#L27
-        void *class_addr = (__bridge void *)(zz_macho_object_get_class((__bridge id)((void *)rs->general.regs.x0)));
-        void *super_class_addr = (__bridge void *)(class_getSuperclass((__bridge Class)(class_addr)));
+        void *class_addr = zz_macho_object_get_class((id)rs->general.regs.x0);
+        if(!class_addr)
+            return;
+        
+        void *super_class_addr = class_getSuperclass(class_addr);
         // KVO 2333
-        if((class_addr > log_class_start_addr && class_addr < log_class_end_addr) || (super_class_addr > log_class_start_addr && super_class_addr < log_class_end_addr)) {
+        if(LOG_ALL_CLASS || ((class_addr > log_class_start_addr && class_addr < log_class_end_addr) || (super_class_addr > log_class_start_addr && super_class_addr < log_class_end_addr))) {
             memset(decollators, 45, 128);
+            if(threadstack->size * 3 >= 128)
+                return;
             decollators[threadstack->size * 3] = '\0';
-            char *class_name = class_getName((__bridge Class)(class_addr));
+            char *class_name = class_getName(class_addr);
             unsigned int class_name_length = strlen(class_name);
             
-            // check View
-            // if(class_name_length >= 4 && !strcmp((class_name + class_name_length - 4), "View")) {
-            //     NSLog(@"thread-id: %ld | %s [%s %s]", threadstack->thread_id, decollators, class_name, sel_name);
-            // }
 
+            
+#if 1
+            // check View
+            if(class_name_length >= 4 && !strcmp((class_name + class_name_length - 4), "View")) {
+                printf(@"thread-id: %ld | %s [%s %s]", threadstack->thread_id, decollators, class_name, sel_name);
+            }
+#endif
+#if 0
+            printf("thread-id: %ld | %s [%s %s]\n", threadstack->thread_id, decollators, class_name, sel_name);
+#endif
+#if 1
             // check ViewController
             if(class_name_length >= 14 && !strcmp((class_name + class_name_length - 14), "ViewController")) {
-#if 1
-                NSLog(@"thread-id: %ld | %s [%s %s]", threadstack->thread_id, decollators, class_name, sel_name);
-#else
-                Method method = class_getInstanceMethod((__bridge Class)(class_addr), sel_name);
+                printf("thread-id: %ld | %s [%s %s]\n", threadstack->thread_id, decollators, class_name, sel_name);
+            }
+#endif
+#if 0
+            // check ViewController with parse parameters (ref readme.md)
+            if(class_name_length >= 14 && !strcmp((class_name + class_name_length - 14), "ViewController")) {
+                Method method = class_getInstanceMethod(class_addr, sel_name);
                 int num_args = method_getNumberOfArguments(method);
                 char method_name[128] = {0};
                 char sel_name_tmp[128] = {0};
@@ -90,7 +109,7 @@ void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *ca
                 x = sel_name_tmp;
                 strcpy(sel_name_tmp, sel_name);
                 if(!strchr(x, ':')) {
-                    NSLog(@"thread-id: %ld | %s [%s %s]", threadstack->thread_id, decollators, class_name, sel_name_tmp);
+                    printf("thread-id: %ld | %s [%s %s]\n", threadstack->thread_id, decollators, class_name, sel_name_tmp);
                     return;
                     
                 }
@@ -102,9 +121,9 @@ void objc_msgSend_pre_call(RegState *rs, ThreadStack *threadstack, CallStack *ca
                     sprintfArg(method_name + strlen(method_name), rs, i, type_name);
                     x = y + 1;
                 }
-                NSLog(@"thread-id: %ld | %s [%s %s]", threadstack->thread_id, decollators, class_name, method_name);
-#endif
+                printf("thread-id: %ld | %s [%s %s]\n", threadstack->thread_id, decollators, class_name, method_name);
             }
+#endif
         }
     }
 }
@@ -119,14 +138,23 @@ void ojbc_msgSend_post_call(RegState *rs, ThreadStack *threadstack, CallStack *c
 @end
 
 Class zz_macho_object_get_class(id object_addr) {
+    if(!object_addr)
+        return NULL;
+#if 0
     if(object_isClass(object_addr)) {
         return object_addr;
     } else {
         return object_getClass(object_addr);
     }
+#elif 1
+    Class kind = object_getClass(object_addr);
+    if (class_isMetaClass(kind))
+        return object_addr;
+    return kind;
+#endif
 }
 
-    
+
 void sprintfArg(char *fd, RegState *rs, int index, char *type_name) {
     if(index > 8) {
         sprintf(fd, "%s", "unknown");
@@ -136,7 +164,7 @@ void sprintfArg(char *fd, RegState *rs, int index, char *type_name) {
     switch(*type_name) {
         case '#':
         case '@': {
-            sprintf(fd, "<class:%s>", object_getClassName((__bridge id)((void *)rs->general.x[index])));
+            sprintf(fd, "<class:%s>", object_getClassName((void *)rs->general.x[index]));
         } break;
         case '*': {
             sprintf(fd, "<char *:%s>", (char *)(rs->general.x[index]));
